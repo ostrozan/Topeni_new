@@ -1,0 +1,1720 @@
+<!DOCTYPE html>
+
+<html lang="cs" xmlns = "http://www.w3.org/1999/xhtml" >
+<head>
+    <meta charset="utf-8" />
+    <title>Topení</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.0/jquery.min.js"></script>
+<script>
+    var typReq = "aktVal";
+    var setValuesTime = Array(5);
+    var setValuesTemp = Array(5);
+    var data = "";
+    var sekce;
+    var nocache;
+    var oldState = new Array(8);
+    var oldStateHdo;
+    var valuesFlag = true;
+    var settingsFlag = false;
+    var tmpRbt;
+    var EnFvObyv="1";
+    var EnFvZimZa="1";
+    var EnFvKoup="1";
+
+
+    function ArduinoConnect() {
+
+        nocache = "&nocache=" + Math.random() * 1000000;
+        var request = new XMLHttpRequest();
+        request.onreadystatechange = function () {
+            if (this.readyState == 4&&this.status == 200) {              
+                if (this.responseXML != null) {
+
+                    var typResp=this.responseXML.getElementsByTagName('stranka')[0].childNodes[0].nodeValue;
+                    if (typResp === "val") {
+                        setTimeout(GetValFromArduino, 100);
+                        typReq = "aktVal";
+                        valuesFlag = true;
+                        GetSensorValues('topeniSwitch', "topeniSwitch", this.responseXML);
+                        GetSensorValues('hdo', "hdo", this.responseXML);
+                        GetSensorValues('teplotaA', "teplotaA", this.responseXML);
+                        GetSensorValues('teplotaN', "teplotaN", this.responseXML);
+                        GetSensorValues('teplotaNadrz', "teplotaNadrz", this.responseXML);
+                        GetSensorValues('teplotaVzt', "teplotaVzt", this.responseXML);
+                        GetSensorValues('teplotaSklep', "teplotaSklep", this.responseXML);
+                        GetSensorValues('teplotaUni', "teplotaUni", this.responseXML);
+                        GetSensorValues('vlhkost', "vlhkost", this.responseXML);
+                        GetSensorValues('topeni', "topeni", this.responseXML);
+                        GetSensorValues('fve', "fve", this.responseXML);
+                        GetSensorValues('fveOutState', "fve", this.responseXML);
+                        GetSensorValues('spOut', "spOut", this.responseXML);
+                        GetSensorValues('cidloCO2', "cidloCO2", this.responseXML);
+                        GetDateTime(this.responseXML);
+
+                    }
+
+                    else if (typResp === "set") {
+                        GetInputValues('time1', "time1", this.responseXML);
+                        GetInputValues('time2', "time2", this.responseXML);
+                        GetInputValues('time3', "time3", this.responseXML);
+                        GetInputValues('time4', "time4", this.responseXML);
+                        GetInputValues('time5', "time5", this.responseXML);
+                        GetInputValues('time6', "time6", this.responseXML);
+                        GetInputValues('time7', "time7", this.responseXML);
+
+                        GetInputValues('temp1', "temp1", this.responseXML);
+                        GetInputValues('temp2', "temp2", this.responseXML);
+                        GetInputValues('temp3', "temp3", this.responseXML);
+                        GetInputValues('temp4', "temp4", this.responseXML);
+                        GetInputValues('temp5', "temp5", this.responseXML);
+                        GetInputValues('temp6', "temp6", this.responseXML);
+                        GetInputValues('temp7', "temp7", this.responseXML);
+                     
+                        GetSection(this.responseXML);
+                    }
+
+                    else if (typResp==="fve") {
+                        FveResponse(this.responseXML);
+                           settingsFlag = false;
+                            valuesFlag = true;
+                    }
+// SendRequest(request);
+                 }
+                
+            }
+        }
+        // send HTTP GET request
+
+       SendRequest(request);
+
+
+    }
+
+    function SendRequest(req) {
+
+        if (valuesFlag) {
+            typReq = "aktVal";
+        }
+       // else typReq = "";
+        req.open("GET", "ajax_" + typReq + data + nocache, true);
+        req.send();
+        var sbstr = typReq.substring(0, 6);
+       
+        /*if (sbstr === "aktVal" || sbstr === "switch" || sbstr === "synchr") {
+            setTimeout(ArduinoConnect, 1000);
+            typReq = "";
+        }
+        else {
+            typReq = "aktVal";
+        }*/
+        data = "";
+    }
+
+    function GetSection(doc) {
+
+        var sect;
+        var sw = doc.getElementsByTagName("sekce")[0].childNodes[0].nodeValue;
+        switch (sw) {
+            case "0": sect = "LOŽNICE"; break;
+            case "1": sect = "POKOJ J."; break;
+            case "2": sect = "PRACOVNA"; break;
+            case "3": sect = "KOUPELNA"; break;
+            case "5": sect = "CHODBA"; break;
+            case "6": sect = "OBÝVÁK"; break;
+            case "7": sect = "TECH. MÍSTNOST"; break;
+            case "8": sect = "Z. ZAHRADA"; break;
+        }
+        var pom = document.getElementById("sect");
+        pom.innerText = sect;
+    }
+
+    function GetDateTime(doc) {
+        
+        document.getElementById("cas").innerHTML = doc.getElementsByTagName("timedate")[0].childNodes[0].nodeValue;
+        document.getElementById("datum").innerHTML = doc.getElementsByTagName("timedate")[1].childNodes[0].nodeValue;
+        var dvtCode=doc.getElementsByTagName("timedate")[2].childNodes[0].nodeValue;
+        var dvtText;
+        DayOfWeek(dvtCode,dvtText);
+        
+
+    }
+
+    function DayOfWeek(code){
+        var retval;
+        switch(code){
+            case "0": retval="neděle";break;
+            case "1": retval="pondělí";break;
+            case "2": retval="úterý";break;
+            case "3": retval="středa";break;
+            case "4": retval="čtvrtek";break;
+            case "5": retval="pátek";break;
+            case "6": retval="sobota";break;
+        }
+        document.getElementById("denVtydnu").innerHTML = retval;
+    }
+
+    function GetInputValues(target, source, doc) {
+        var num = doc.getElementsByTagName(target).length;
+        for (count = 0; count < num; count++) {
+            document.getElementsByClassName(target)[count].value =
+                doc.getElementsByTagName(source)[count].childNodes[0].nodeValue;
+        }
+
+    }
+
+    function GetSensorValues(target, source, doc) {
+        var num = doc.getElementsByTagName(source).length;
+        var val;
+        var trg;
+        for (count = 0; count < num; count++) {
+            
+            val = doc.getElementsByTagName(source)[count].childNodes[0].nodeValue;
+            trg=document.getElementsByClassName(target)[count];           
+            
+            if (target === "topeni") {
+
+                trg.innerHTML = SelectHeatState(val);
+
+                
+                if (trg.innerHTML === "netopí") trg.style = "color: blue";
+                else if (trg.innerHTML === "topí") trg.style = "color: red";
+                else trg.style = "color: black";
+            }
+
+            else if (target === "topeniSwitch") {
+                var butt=document.getElementsByClassName("topeniSwitch")[count];
+                if(val=="0")butt.value="vypnout";
+                else butt.value="zapnout";
+                if (butt.value === oldState[count]) {}
+                else{
+                    
+                    
+                    if (oldState[count] === "vypnout") {
+                        butt.value = "zapnout";
+                        butt.style = "background: #DDE420";
+                    }
+                    else  {
+                        butt.value = "vypnout";
+                        butt.style = "background: #43DE26";
+                    }
+                    oldState[count] = butt.value;
+                }
+
+
+            }
+
+            else if (target === "hdo") {
+                var trgHdo = document.getElementsByClassName('hdo')[0];//span
+                var butHdo = document.getElementsByClassName('hdoSwitch')[0];//input button
+                trgHdo.innerHTML = val;
+
+                if (val ==="vypnut"||val ==="zapnut") {
+                    butHdo.value = "přepnout na ruční";
+                }
+
+
+                else{
+                    butHdo.value = "přepnout na auto";
+                }                
+            }
+            
+            else if(target ===  "fveOutState"){
+                if(val === "vypnuto trvale"){
+                    document.getElementsByClassName("enFVE")[count].innerHTML = "Zakázán" ;
+                    document.getElementsByClassName("fveEnable")[count].innerHTML = "Povolit" ;
+                    document.getElementsByClassName(target)[count].innerHTML = val;
+                }
+
+                else{
+                document.getElementsByClassName("enFVE")[count].innerHTML = "Povolen" ;
+                document.getElementsByClassName("fveEnable")[count].innerHTML = "Zakázat" ;
+                document.getElementsByClassName(target)[count].innerHTML = val;
+                }
+
+            }
+
+            else if(target ===  "spOut"){
+                var visElement =document.getElementsByClassName("spMan")[count];
+                if(val === "vypnuto auto" || val === "zapnuto auto"){
+                    document.getElementsByClassName("spEn")[count].innerHTML = "přepnout na ruční" ;
+                    document.getElementsByClassName(target)[count].innerHTML = val;
+                    visElement.style.visibility = "collapse";
+                }
+
+                else if(val === "vypnuto rucne" || val === "zapnuto rucne"){
+                    if (val === "vypnuto rucne" ) {
+                        visElement.innerHTML = "Zapnout";
+                    }
+                    else visElement.innerHTML = "Vypnout";
+
+                document.getElementsByClassName("spEn")[count].innerHTML = "přepnout na auto" ;
+                document.getElementsByClassName(target)[count].innerHTML = val;
+                visElement.style.visibility = "visible";
+                }
+
+            }
+            else if (trg.tagName =="INPUT") {
+                document.getElementsByClassName(target)[count].value = val;
+
+                } 
+                else  document.getElementsByClassName(target)[count].innerHTML = val;
+
+        }
+
+    }
+
+    function FveResponse( doc){
+
+        GetSensorValues("fveTime","fveTime",doc);
+        GetSensorValues("fveTemp","fveTemp",doc);
+       // GetSensorValues("fveOutState","fveOutState",doc);
+        GetSensorValues("sp0","sp0",doc);
+        GetSensorValues("sp1","sp1",doc);
+        GetSensorValues("sp2","sp2",doc);
+        GetSensorValues("sp3","sp3",doc);
+        GetSensorValues("sp4","sp4",doc);
+        GetSensorValues("fveEnable","fveEnable",doc);
+        var tmpEnFve= doc.getElementsByTagName('fveEnable');
+        if(tmpEnFve[0].innerHTML === "Povolit")fveAccuZz ="0";
+        else fveAccuZz ="1";
+        if(tmpEnFve[1].innerHTML === "Povolit")fveAccuObyv ="0";
+        else fveAccuObyv ="1";        
+        if(tmpEnFve[2].innerHTML === "Povolit")fveAccuKo ="0";
+        else fveAccuKo ="1";
+    }
+
+    function SelectHeatState(val) {
+
+        var stav = (val === "0") ? "netopí" : (val === "1") ? "topí" : "vypnuto";
+        return stav;
+
+
+    }
+
+    function InputInit() {
+
+        var inputs = document.getElementsByTagName('input');
+
+        for (var count = 0; count < inputs.length; count++) {
+            if (inputs[count].type === "number") {
+                inputs[count].min = 15;
+                inputs[count].max = 30;
+                inputs[count].step = 0.5;
+            }
+
+        }
+        var inputs2 = document.getElementsByClassName('fveTemp');
+
+        for (var count = 0; count < inputs2.length; count++) {
+            if (inputs2[count].type === "number") {
+                inputs2[count].min = 15;
+                inputs2[count].max = 35;
+                inputs2[count].step = 1;
+            }
+
+        }
+
+    }
+
+    function SwitchHeat(butt, sect) {
+
+        settingsFlag = true;
+        valuesFlag = false;
+        if (butt.value === "vypnout") {
+            typReq = "switchoff$" + sect;
+
+        }
+        else {
+            typReq = "switchon$" + sect;
+        }
+        ArduinoConnect();
+    }
+
+
+    function HdoBypass(butt) {
+
+        settingsFlag = true;
+        valuesFlag = false;
+        if (butt.value === "přepnout na ruční" ) {
+           // butt.value = "přepnout na auto" 
+            typReq = "HDOon$" ;
+        }
+        else {
+            typReq = "HDOoff$" ;
+           // butt.value = "přepnout na ruční" 
+        }
+        ArduinoConnect();
+    }
+
+    function GetValFromArduino() {
+        typReq = "aktVal";
+        valuesFlag = true;
+        settingsFlag = false;
+        ArduinoConnect();
+    }
+
+    function GetSectSettings(cidlo,radioBtn) {
+        sekce = cidlo;
+        typReq = "setVal$" + cidlo;
+        settingsFlag = true;
+        valuesFlag = false;
+        ArduinoConnect();
+    }
+
+    function GetFveValues(){
+        typReq = "fveVal";
+        valuesFlag = false;
+        settingsFlag = true;
+        ArduinoConnect();
+
+    }
+
+    function SaveValues(den) {
+        
+        var clsTi;
+        var clsTe;
+        var _den;
+        switch (den) {
+            case 1: clsTi = "time1"; clsTe = "temp1"; _den = "po"; break;
+            case 2: clsTi = "time2"; clsTe = "temp2"; _den = "ut"; break;
+            case 3: clsTi = "time3"; clsTe = "temp3"; _den = "st"; break;
+            case 4: clsTi = "time4"; clsTe = "temp4"; _den = "ct"; break;
+            case 5: clsTi = "time5"; clsTe = "temp5"; _den = "pa"; break;
+            case 6: clsTi = "time6"; clsTe = "temp6"; _den = "so"; break;
+            case 0: clsTi = "time7"; clsTe = "temp7"; _den = "ne"; break;
+        }
+
+        typReq = "save$" + sekce + _den;
+        settingsFlag = true;
+        valuesFlag = false;
+
+
+
+        data += "_C_";
+        for (cnt = 0; cnt < 5; cnt++) {
+            setValuesTime[cnt] = document.getElementsByClassName(clsTi)[cnt].value;
+            data += ';' + setValuesTime[cnt];
+           // setValuesTemp[cnt] = document.getElementsByClassName(clsTe)[cnt].value;
+        }
+        data += ";_T_";
+        for (cnt = 0; cnt < 5; cnt++) {
+            setValuesTime[cnt] = document.getElementsByClassName(clsTe)[cnt].value;
+            data += ';' + setValuesTime[cnt];
+           // setValuesTemp[cnt] = document.getElementsByClassName(clsTe)[cnt].value;
+        }
+        data += ';';
+        ArduinoConnect();
+    }
+
+    function SaveTimeSwich(){
+        typReq = "save$Spin";
+        settingsFlag = true;
+        valuesFlag = false;
+
+        for (cnt = 0; cnt < 4; cnt++) {
+            setValuesTime[cnt] = document.getElementsByClassName("spinacky")[cnt].value;
+            data += ';' + setValuesTime[cnt];
+        }
+        data += ';';
+        ArduinoConnect();
+    }
+
+     function SaveFve(sect){
+        typReq = "save$Fve"+ '~';
+        settingsFlag = true;
+        valuesFlag = false;
+        var times = document.getElementsByClassName('fveTime');
+        var temps = document.getElementsByClassName('fveTemp');
+        for (cnt = 0; cnt < 2; cnt++) {
+            data += ';' + times[cnt].value;
+        }
+        data += ';';
+        data += temps[0].value;
+        data += ';';
+        data += EnFvZimZa;
+        data += ';';
+        for (cnt = 2; cnt < 4; cnt++) {
+            data += ';' + times[cnt].value;
+        }
+        data += ';';
+        data += temps[1].value;       
+        data += ';';
+        data += EnFvObyv;
+        for (cnt = 4; cnt < 6; cnt++) {
+        data += ';' + times[cnt].value;
+        }
+        data += ';';
+        data += temps[2].value;       
+        data += ';';
+        data += EnFvKoup;
+        ArduinoConnect();
+    } 
+
+    function FveEnable(sect,butt){
+        settingsFlag = true;
+        valuesFlag = false;
+         var _sect;     
+        if (butt.innerHTML === "Zakázat") {
+            
+            if (sect === "Ob"){EnFvObyv = "0"; _sect = "0";}
+            else if (sect === "Ko"){EnFvKoup = "0"; _sect = "1";}
+            else {EnFvZimZa = "0"; _sect = "2";}
+            typReq = "FVEswitchoff$" + _sect;
+        }
+        else {
+            
+            if (sect === "Ob"){EnFvObyv = "1"; _sect = "0";}
+            else if (sect === "Ko"){EnFvKoup = "1"; _sect = "1";}
+            else {EnFvZimZa = "1";_sect = "2";}
+            typReq = "FVEswitchon$" + _sect; 
+        } 
+
+        ArduinoConnect();
+    }  
+
+    function SpinEnable(butt,sect){
+        settingsFlag = true;
+        valuesFlag = false; 
+        if (butt.innerHTML === "přepnout na ruční") {
+            
+            typReq = "MANswitchoff$" + sect;
+        }
+        else {
+            
+            typReq = "MANswitchon$" + sect; 
+        } 
+
+        ArduinoConnect();
+    }  
+
+    function ManSwitch(butt,sect){
+        settingsFlag = true;
+        valuesFlag = false; 
+        if (butt.innerHTML === "Vypnout") {
+            
+            typReq = "SPINswitchoff$" + sect;
+        }
+        else {
+            
+            typReq = "SPINswitchon$" + sect; 
+        } 
+
+        ArduinoConnect();
+
+
+    }
+
+
+    function Spinacky(vystup){
+        typReq = "save$Spin"+ vystup;
+        var spin0 =document.getElementsByClassName("sp0");
+        var spin1 =document.getElementsByClassName("sp1");
+        var spin2 =document.getElementsByClassName("sp2");
+        var spin3 =document.getElementsByClassName("sp3");
+        var spin4 =document.getElementsByClassName("sp4");
+        var spinArr=new Array(spin0,spin1,spin2,spin3,spin4);
+        var num = vystup*4;
+        for (cnt = 0; cnt < 4; cnt++) {
+           //setValuesTime[cnt] = 
+            data += ';' + spinArr[vystup][cnt].value;
+        }
+        data += ';'; 
+        settingsFlag = true;
+        valuesFlag = false;
+        ArduinoConnect();
+
+    }
+
+    function TimeSynchro() {
+        var datumCas = new Date();
+
+        data += ':' + datumCas.getDate();
+        data += ':' + datumCas.getMonth();
+        data += ':' + datumCas.getFullYear();
+        
+        data += ':' + datumCas.getHours();
+        data += ':' + datumCas.getMinutes();
+        data += ':' + datumCas.getSeconds();
+        data += ':' + datumCas.getDay() + ':';
+        typReq = "synchro$";
+        valuesFlag = false;
+        ArduinoConnect();
+    }
+</script>
+    <style>
+
+/*tabule*/
+        .tabbed{
+  float : left;
+  width : 100%;
+}
+
+.tabbed > input{
+  display : none;
+}
+
+.tabbed > section > h1{
+  float       : left;
+  box-sizing  : border-box;
+  margin      : 0;
+  padding     : 0.5em 0.5em 0;
+  overflow    : hidden;
+  font-size   : 1em;
+  font-weight : normal;
+}
+
+.tabbed > input:first-child + section > h1{
+  padding-left : 1em;
+}
+
+.tabbed > section > h1 > label{
+  display                 : block;
+  font-size:large;
+  height:25px;
+  padding                 : 0.25em 0.75em;
+  border                  : 1px solid #ddd;
+  border-bottom           : none;
+  border-top-left-radius  : 4px;
+  border-top-right-radius : 4px;
+  background              : #fff;
+  cursor                  : pointer;
+     -moz-user-select     : none;
+      -ms-user-select     : none;
+  -webkit-user-select     : none;
+}
+
+.tabbed > section > div{
+  position      : relative;
+  z-index       : 1;
+  float         : right;
+  box-sizing    : border-box;
+  width         : 100%;
+  margin        : 2.5em 0 0 -100%;
+  padding       : 0.5em 0.75em;
+  border        : 1px solid #ddd;
+  border-radius : 4px;
+  box-shadow    : 0 0 0.5em rgba(0,0,0,0.0625);
+  background    : #fff;
+}
+
+.tabbed > input:checked + section > h1{
+  position : relative;
+  z-index  : 2;
+}
+
+.tabbed > input:not(:checked) + section > div{
+  display : none;
+}
+/*end tabule*/
+
+/*chlivky*/
+        .IO_boxYell {
+            float: left;
+            margin: 0 1px 10px 0;
+            border: 3px solid blue;
+            width: 210px;
+            height:238px;
+            background:rgba(253, 248, 55, 0.41);
+        }
+        .IO_boxGree {
+            float: left;
+            margin: 0 1px 10px 0;
+            border: 3px solid blue;
+            width: 200px;
+            height:auto;
+            background:rgba(158, 254, 110, 0.84);
+        }
+        .IO_boxYell input {
+            background:#43DE26;
+            margin-left:58px;
+           
+        }
+
+        span {
+        color:#b90907;
+        font-weight:bold;
+        }
+
+        .teplotaN{
+           color:black;
+        font-weight:bold;         
+        }
+
+        h1 {
+            font-size: larger;
+            color: #252525;
+            
+            margin: 0 0 10px 0;
+        }
+        h2 {
+            font-size: larger;
+            color: #5734E6;
+            text-align:center;
+            margin: 5px 0 5px 0;
+        }
+        h5 {
+            color: #5734E6;
+            text-align:center;
+            margin: 2px 0 2px 0;
+
+        }
+        /*p, form, button {
+            font-size: 80%;
+            color: #252525;
+        }*/
+        .small_text {
+            font-size: 70%;
+            color: #737373;
+        }
+        .text{
+            font-size:medium;
+            margin:10px;
+            color:#101010;
+        }
+/*end chlivky*/
+
+/*prepinac*/
+
+label {
+margin-left:10px;
+margin-right:10px;
+  width:110px;
+  border-radius: 3px;
+  border: 2px solid #D1D3D4
+}
+
+/* hide input */
+input.radio:empty {
+    visibility:hidden;
+    margin-left: -300px;
+}
+
+/* style label */
+input.radio:empty ~ label {
+    position: relative;
+    float: left;
+    /*line-height: 2.5em;
+    
+    margin-top: 2em;*/
+    text-indent: 2em;
+    cursor: pointer;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+input.radio:empty ~ label:before {
+    position: absolute;
+    display: block;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    content: '';
+    width: 1.5em;
+    background: #D1D3D4;
+    border-radius: 3px 0 0 3px;
+}
+
+/* toggle hover */
+input.radio:hover:not(:checked) ~ label:before {
+    content:'\2714';
+    text-indent: .3em;
+    color: #C2C2C2;
+}
+
+input.radio:hover:not(:checked) ~ label {
+    color: #1bd10a;
+}
+
+/* toggle on */
+input.radio:checked ~ label:before {
+    content:'\2714';
+    text-indent: .3em;
+    color: #9CE2AE;
+    background-color: #4DCB6D;
+}
+
+input.radio:checked ~ label {
+    color: #0622ae;
+}
+
+/* radio focus */
+input.radio:focus ~ label:before {
+    /*box-shadow: 0 0 0 3px #999;*/
+}
+/*end prepinac*/
+
+/*tabulky*/
+.CSSTable {
+    float: left;
+    margin:10px;padding:0px;
+    width:200px;
+    border:1px solid #000000;
+    background:rgba(94, 251, 99, 0.52);
+    
+
+}.CSSTable table{
+    border-collapse: collapse;
+        border-spacing: 0;
+    width:100%;
+    height:100%;
+    margin:0px;
+    padding:0px;
+
+}.CSSTable tr:hover td{
+    background-color:#ffffff;
+    
+}
+    .CSSTable caption {
+        background-color: #76E884; 
+        font-size:larger;
+
+}.CSSTable input{                                  
+    display:block;
+    width:auto;
+    text-align:center;
+    font-size:medium;
+    margin-left:auto;
+    margin-right:auto;
+}   
+
+    
+}.CSSTable td{
+    vertical-align:middle;
+        background:-o-linear-gradient(bottom, #aad4ff 5%, #ffffff 100%);    background:-webkit-gradient( linear, left top, left bottom, color-stop(0.05, #aad4ff), color-stop(1, #ffffff) ); 
+    background:-moz-linear-gradient( center top, #aad4ff 5%, #ffffff 100% );
+    filter:progid:DXImageTransform.Microsoft.gradient(startColorstr="#aad4ff", endColorstr="#ffffff");  background: -o-linear-gradient(top,#aad4ff,ffffff);
+
+    background-color:#aad4ff;
+    width:50%;
+    border:1px solid #000000;
+    border-width:0px 1px 1px 0px;
+    text-align:left;
+    padding:2px;
+    font-size:10px;
+    font-family:Arial;
+    font-weight:normal;
+    color:#000000;
+    
+}.CSSTable tr:last-child td{
+    border-width:0px 1px 0px 0px;
+}.CSSTable tr td:last-child{
+    border-width:0px 0px 1px 0px;
+}.CSSTable tr:last-child td:last-child{
+    border-width:0px 0px 0px 0px;
+}
+.CSSTable tr:first-child td{
+        background:-o-linear-gradient(bottom, #005fbf 5%, #003f7f 100%);    background:-webkit-gradient( linear, left top, left bottom, color-stop(0.05, #005fbf), color-stop(1, #003f7f) );
+    background:-moz-linear-gradient( center top, #005fbf 5%, #003f7f 100% );
+    filter:progid:DXImageTransform.Microsoft.gradient(startColorstr="#005fbf", endColorstr="#003f7f");  background: -o-linear-gradient(top,#005fbf,003f7f);
+
+    background-color:#005fbf;
+    border:0px solid #000000;
+    text-align:center;
+    border-width:0px 0px 1px 1px;
+    font-size:20px;
+    font-family:Arial;
+    font-weight:bold;
+    color:#ffffff;
+}
+.CSSTable tr td span{
+    color:white;
+    margin:5px;
+    font-size:25px;
+}
+.CSSTable tr:first-child:hover td{
+    background:-o-linear-gradient(bottom, #005fbf 5%, #003f7f 100%);    background:-webkit-gradient( linear, left top, left bottom, color-stop(0.05, #005fbf), color-stop(1, #003f7f) );
+    background:-moz-linear-gradient( center top, #005fbf 5%, #003f7f 100% );
+    filter:progid:DXImageTransform.Microsoft.gradient(startColorstr="#005fbf", endColorstr="#003f7f");  background: -o-linear-gradient(top,#005fbf,003f7f);
+
+    background-color:#005fbf;
+}
+.CSSTable tr:first-child td:first-child{
+    border-width:0px 0px 1px 0px;
+}
+.CSSTable tr:first-child td:last-child{
+    border-width:0px 0px 1px 1px;
+}
+
+.spinTable{
+
+    background: #bbc3f6;
+    margin: 5px;
+}
+.spinTable caption{
+    background: #8d9aeb;
+    font-size: 20px;
+}
+.spinTable input{
+    font-size: small;
+    text-align: center;
+    height: auto;
+}.spinTable p{
+    font-weight: : bold;
+    font-size: large;
+}.spinTable td{
+	align-content: center;
+}
+
+/*end tabulky*/
+
+/*button ulozit*/
+.buttSave{
+    margin-left:21px;
+    margin-bottom:10px;
+  /* visibility:collapse;*/ 
+}
+/*end button ulozit*/
+
+/*button synchro*/
+#synchroButton{
+    margin-left:35px;
+}
+/* end button synchro*/
+
+/*button hdo*/
+.hdoSwitch{
+    margin-left:30px;
+}
+/*end button hdo*/
+
+.fveOutState{
+	text-align: center;
+    margin-top: 2px;
+}
+.fveTemp{
+margin-left:42px;
+
+}
+
+    </style>
+}
+}
+</head>
+<body onload="InputInit(),ArduinoConnect()"  id="mainWindow">
+    <div class="tabbed">
+        <input name="tabbed" id="tabbed1" type="radio" checked>
+        <section>
+            <h1>
+                <label for="tabbed1" onclick="GetValFromArduino()">Přehled</label>
+            </h1>
+            <div>
+                <table style="margin-left:20px">
+                    <tr>
+                        <td class="IO_boxYell">
+                            <h2>LOŽNICE</h2>
+                            <p class="text"> teplota akt: &nbsp;&nbsp;<span class="teplotaA">0,00</span> °C</p>
+                            <p class="text"> teplota nast: <span class="teplotaN">0,00</span> °C</p>
+                            <p class="text"> vlhkost:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="vlhkost">   0,00</span> %</p>
+                            <p class="text"> topení:         <span class="topeni" id="topeni1"></span></p>
+                            <p>.</p>
+                            <p>
+                                <input class="topeniSwitch" type="button" onclick="SwitchHeat(this,0)" value="vypnout" />                            
+                            </p>
+
+                        </td>
+                        <td width="10"></td>
+                        <td class="IO_boxYell">
+                            <h2>POKOJ J.</h2>
+                            <p class="text"> teplota akt: &nbsp;&nbsp;<span class="teplotaA">0,00</span> °C</p>
+                            <p class="text"> teplota nast: <span class="teplotaN">0,00</span> °C</p>
+                            <p class="text"> vlhkost:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="vlhkost">   0,00</span> %</p>
+                            <p class="text"> topení:  <span class="topeni" id="topeni1"></span></p>
+                            <p>.</p>
+                            <p>
+                                <input class="topeniSwitch" type="button" onclick="SwitchHeat(this,1)" value="vypnout"/>
+                            </p>
+                        </td>
+                        <td width="10"></td>
+                        <td class="IO_boxYell">
+                            <h2>PRACOVNA</h2>
+                            <p class="text"> teplota akt: &nbsp;&nbsp;<span class="teplotaA">0,00</span> °C</p>
+                            <p class="text"> teplota nast: <span class="teplotaN">0,00</span> °C</p>
+                            <p class="text"> vlhkost:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="vlhkost">   0,00</span> %</p>
+                            <p class="text"> topení:  <span class="topeni" id="topeni1"></span></p>
+                            <p>.</p>
+                            <p>
+                                <input class="topeniSwitch" type="button" onclick="SwitchHeat(this,2)" value="vypnout" />
+                            </p>
+                        </td>
+                        <td width="10"></td>
+                        <td class="IO_boxYell">
+                            <h2>KOUPELNA</h2>
+                            <p class="text"> teplota akt: &nbsp;&nbsp;<span class="teplotaA">0,00</span> °C</p>
+                            <p class="text"> teplota nast: <span class="teplotaN">0,00</span> °C</p>
+                            <p class="text"> vlhkost:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="vlhkost">   0,00</span> %</p>
+                            <p class="text"> topení:  <span class="topeni" id="topeni1"></span></p>
+                            <p class="text"> fve:  <span class="fve" id="fve3"></span></p>
+                            <p>
+                                <input class="topeniSwitch" type="button" onclick="SwitchHeat(this,3)" value="vypnout" />
+                            </p>
+                        </td>
+                        <td width="80"></td>
+                        <td class="IO_boxGree">
+                            <h5>VENKOVNÍ</h5>
+                            <p class="text"> teplota:  <span class="teplotaA">0,00</span> °C</p>
+                            <p class="text"> vlhkost:  <span class="vlhkost">0,00</span> %</p>
+                            <h5>VZT</h5>
+                            <p class="text"> teplota:  <span class="teplotaVzt">0,00</span> °C</p>
+                            <h5>HDO</h5>
+                            <p class="text"> NT:  <span class="hdo">vypnut</span></p>
+                            <p><input class="hdoSwitch" type="button" name="buttBypasHdo" value="přepnout na ruční" onclick="HdoBypass(this)" ></p>
+                            
+                        </td>
+
+                    </tr>
+                    <!--tr style="height:20px"></tr-->
+                    <tr>
+                        <td class="IO_boxYell" float="none">
+                            <h2>ŠATNA CHODBA</h2>
+                            <p class="text"> teplota akt: &nbsp;&nbsp;<span class="teplotaA">0,00</span> °C</p>
+                            <p class="text"> teplota nast: <span class="teplotaN">0,00</span> °C</p>
+                            <p class="text"> vlhkost:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="vlhkost">   0,00</span> %</p>
+                            <p class="text"> topení:  <span class="topeni" id="topeni1"></span></p>
+                            <p>.</p>
+                            <p>
+                                <input class="topeniSwitch" type="button" onclick="SwitchHeat(this,5)" value="vypnout" />
+                            </p>
+                        </td>
+                        <td width="10"></td>
+                        <td class="IO_boxYell">
+                            <h2>OBÝVÁK</h2>
+                            <p class="text"> teplota akt: &nbsp;&nbsp;<span class="teplotaA">0,00</span> °C</p>
+                            <p class="text"> teplota nast: <span class="teplotaN">0,00</span> °C</p>
+                            <p class="text"> vlhkost:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="vlhkost">   0,00</span> %</p>
+                            <p class="text"> topení:  <span class="topeni" id="topeni1"></span></p>
+                            <p class="text"> fve:  <span class="fve" id="fve1"></span></p>
+                            <p>
+                                <input class="topeniSwitch" type="button" onclick="SwitchHeat(this,6)" value="vypnout" />
+                            </p>
+                        </td>
+                        <td width="10"></td>
+                        <td class="IO_boxYell">
+                            <h2>TECH. MÍSTNOST</h2>
+                            <p class="text"> teplota akt: &nbsp;&nbsp;<span class="teplotaA">0,00</span> °C</p>
+                            <p class="text"> teplota nast: <span class="teplotaN">0,00</span> °C</p>
+                            <p class="text"> vlhkost:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="vlhkost">   0,00</span> %</p>
+                            <p class="text"> topení:  <span class="topeni" id="topeni1"></span></p>
+                            <p>.</p>
+                            <p>
+                                <input class="topeniSwitch" type="button" onclick="SwitchHeat(this,7)" value="vypnout" />
+                            </p>
+                        </td>
+                        <td width="10"></td>
+                        <td class="IO_boxYell">
+                            <h2>ZIMNÍ ZAHRADA</h2>
+                            <p class="text"> teplota akt: &nbsp;&nbsp;<span class="teplotaA">0,00</span> °C</p>
+                            <p class="text"> teplota nast: <span class="teplotaN">0,00</span> °C</p>
+                            <p class="text"> vlhkost:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="vlhkost">   0,00</span> %</p>
+                            <p class="text"> topení:  <span class="topeni" id="topeni1"></span></p>
+                            <p class="text"> fve:  <span class="fve" id="fve2"></span></p>
+                            <p>
+                                <input class="topeniSwitch" type="button" onclick="SwitchHeat(this,8)" value="vypnout" />
+                            </p>
+                        </td>
+                        <td width="80"></td>
+                        <td class="IO_boxGree">
+                          
+                            <p class="text"> CO2:  <span class="cidloCO2"> 00  </span> %</p>
+                       
+                            <h5>NÁDRŽ</h5>
+                            <p class="text"> horní:  <span class="teplotaNadrz">0,00</span> °C</p>
+                            <p class="text"> střed:  <span class="teplotaNadrz">0,00</span> °C</p>
+                            <p class="text"> dolní:  <span class="teplotaNadrz">0,00</span> °C</p>
+                            <p style="margin-bottom: 2px;" style="margin-top:2px; ">.</p>
+                            <p class="text"> sklep:  <span class="teplotaSklep">0,00</span> °C</p>
+                            <p class="text"> sklep v:  <span class="teplotaSklep">0,00</span> °C</p>
+                            <p class="text"> teplota:  <span class="teplotaUni">0,00</span> °C</p>
+                        </td>
+                    </tr>
+
+                </table>
+            </div>
+        </section>
+        <input name="tabbed" id="tabbed2" type="radio">
+        <section>
+            <h1>
+                <label for="tabbed2" >Nastavení</label><!--onclick="GetSectSettings(0)"-->
+            </h1>            
+            <div>
+                <table>
+                    <tr>
+                        <td>
+                            <input type="radio" name="radio" id="radio1" class="radio" onclick="GetSectSettings(0,this)" />
+                            <label for="radio1">Ložnice</label>
+                        </td>
+                        <td>
+                            <input type="radio" name="radio" id="radio2" class="radio" onclick="GetSectSettings(1,this)" />
+                            <label for="radio2">Pokoj J.</label>
+                        </td>
+                        <td>
+                            <input type="radio" name="radio" id="radio3" class="radio" onclick="GetSectSettings(2,this)" />
+                            <label for="radio3">Pracovna</label>
+                        </td>
+                        <td>
+                            <input type="radio" name="radio" id="radio4" class="radio" onclick="GetSectSettings(3,this)" />
+                            <label for="radio4">Koupelna</label>
+                        </td>
+                        <td>
+                            <input type="radio" name="radio" id="radio5" class="radio"  onclick="GetSectSettings(5,this,this)"/>
+                            <label for="radio5">Chodba</label>
+                        </td>
+                        <td>
+                            <input type="radio" name="radio" id="radio6" class="radio"  onclick="GetSectSettings(6,this)"/>
+                            <label for="radio6">Obývák</label>
+                        </td>
+                        <td>
+                            <input type="radio" name="radio" id="radio7" class="radio" onclick="GetSectSettings(7,this)" />
+                            <label for="radio7">T. místnost</label>
+                        </td>
+                        <td>
+                            <input type="radio" name="radio" id="radio8" class="radio" onclick="GetSectSettings(8,this)" />
+                            <label for="radio8">Z. zahrada</label>
+                        </td>
+
+                    </tr>
+                </table>
+                <div>
+                    <table class="CSSTable">
+                        <caption>pondělí</caption>
+                        <tr>
+                            <th>
+                                čas
+                            </th>
+                            <th>
+                                teplota
+                            </th>
+
+                        </tr>
+                        <tr>
+                            <td><input class="time1" type="time" readonly></td>
+                            <td><input class="temp1" type="number" max=25></td>
+
+                        </tr>
+                        <tr>
+                            <td><input class="time1" type="time"></td>
+                            <td><input class="temp1" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time1" type="time"></td>
+                            <td><input class="temp1" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time1" type="time"></td>
+                            <td><input class="temp1" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time1" type="time"></td>
+                            <td><input class="temp1" type="number" max=30></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2"><button class="buttSave" onclick="SaveValues(1)">Uložit</button></td >
+                        </tr>
+                    </table>
+                </div>
+                <div>
+                    <table class="CSSTable">
+                        <caption>úterý</caption>
+                        <tr>
+                            <th>
+                                čas
+                            </th>
+                            <th>
+                                teplota
+                            </th>
+
+                        </tr>
+                        <tr>
+                            <td><input class="time2" type="time" readonly></td>
+                            <td><input class="temp2" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time2" type="time"></td>
+                            <td><input class="temp2" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time2" type="time"></td>
+                            <td><input class="temp2" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time2" type="time"></td>
+                            <td><input class="temp2" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time2" type="time"></td>
+                            <td><input class="temp2" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2"><button class="buttSave" onclick="SaveValues(2)">Uložit</button></td>
+                        </tr>
+                    </table>
+                </div>
+                <div>
+                    <table class="CSSTable">
+                        <caption>středa</caption>
+                        <tr>
+                            <th>
+                                čas
+                            </th>
+                            <th>
+                                teplota
+                            </th>
+
+                        </tr>
+                        <tr>
+                            <td><input class="time3" type="time" readonly></td>
+                            <td><input class="temp3" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time3" type="time"></td>
+                            <td><input class="temp3" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time3" type="time"></td>
+                            <td><input class="temp3" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time3" type="time"></td>
+                            <td><input class="temp3" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time3" type="time"></td>
+                            <td><input class="temp3" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2"><button class="buttSave" onclick="SaveValues(3)">Uložit</button></td>
+                        </tr>
+                    </table>
+                </div>
+                <div>
+                    <table class="CSSTable">
+                        <caption>čtvrtek</caption>
+                        <tr>
+                            <th>
+                                čas
+                            </th>
+                            <th>
+                                teplota
+                            </th>
+
+                        </tr>
+                        <tr>
+                            <td><input class="time4" type="time" readonly></td>
+                            <td><input class="temp4" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time4" type="time"></td>
+                            <td><input class="temp4" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time4" type="time"></td>
+                            <td><input class="temp4" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time4" type="time"></td>
+                            <td><input class="temp4" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time4" type="time"></td>
+                            <td><input class="temp4" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2"><button class="buttSave" onclick="SaveValues(4)">Uložit</button></td>
+                        </tr>
+                    </table>
+                </div>
+                <div>
+                    <table class="CSSTable">
+                        <caption>pátek</caption>
+                        <tr>
+                            <th>
+                                čas
+                            </th>
+                            <th>
+                                teplota
+                            </th>
+
+                        </tr>
+                        <tr>
+                            <td><input class="time5" type="time" readonly></td>
+                            <td><input class="temp5" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time5" type="time"></td>
+                            <td><input class="temp5" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time5" type="time"></td>
+                            <td><input class="temp5" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time5" type="time"></td>
+                            <td><input class="temp5" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time5" type="time"></td>
+                            <td><input class="temp5" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2"><button class="buttSave" onclick="SaveValues(5)">Uložit</button></td>
+                        </tr>
+                    </table>
+                </div>
+                <div>
+                    <table class="CSSTable">
+                        <caption>sobota</caption>
+                        <tr>
+                            <th>
+                                čas
+                            </th>
+                            <th>
+                                teplota
+                            </th>
+
+                        </tr>
+                        <tr>
+                            <td><input class="time6" type="time" readonly></td>
+                            <td><input class="temp6" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time6" type="time"></td>
+                            <td><input class="temp6" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time6" type="time"></td>
+                            <td><input class="temp6" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time6" type="time"></td>
+                            <td><input class="temp6" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time6" type="time"></td>
+                            <td><input class="temp6" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2"><button class="buttSave" onclick="SaveValues(6)">Uložit</button></td>
+                        </tr>
+                    </table>
+                </div>
+                <div>
+                    <table class="CSSTable">
+                        <caption>neděle</caption>
+                        <tr>
+                            <th>
+                                čas
+                            </th>
+                            <th>
+                                teplota
+                            </th>
+
+                        </tr>
+                        <tr>
+                            <td><input class="time7" type="time" readonly></td>
+                            <td><input class="temp7" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time7" type="time"></td>
+                            <td><input class="temp7" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time7" type="time"></td>
+                            <td><input class="temp7" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time7" type="time"></td>
+                            <td><input class="temp7" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td><input class="time7" type="time"></td>
+                            <td><input class="temp7" type="number" max=25></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2"><button class="buttSave" onclick="SaveValues(0)">Uložit</button></td>
+                        </tr>
+                    </table>
+                </div>
+                <div>
+                    <table class="CSSTable">
+
+
+                            <caption>datum a čas řídící jednotky</caption>                  
+                     <tr>
+                        <td>
+                            <p >
+                            <span id="cas">00:00:00</span>
+                            <br />
+                            <span id="datum">00.00.0000</span> 
+                            <br/>
+                            <span id="denVtydnu">pondělí</span>
+                            </p>
+                        </td>
+                     </tr>
+     
+                         <tr>
+                             <td>
+                                 <button id="synchroButton" onclick="TimeSynchro()">synchronizace času</button> 
+                             </td>
+                         </tr>
+                    </table>  
+                </div>
+                <div>
+                    <table class="CSSTable">
+
+
+                        <caption>Nastavení hodnot pro:</caption>
+
+
+
+                        <tr>
+                            <th  id="sect">
+                                
+                            </th>
+                        </tr>
+                
+
+   
+                    </table>
+                </div>
+            </div>           
+        </section>
+        <input name="tabbed" id="tabbed3" type="radio" onclick="GetFveValues()">
+        <section>
+            <h1>
+                <label for="tabbed3" >FVE</label><!--onclick="GetSectSettings(0)"-->
+            </h1>
+            <div>
+
+            <table style="margin-left:10px; ">
+            <tr>
+                <td>
+                    <table class="spinTable" id="fveAccuKo">
+                        <caption>Koupelna</caption>
+
+                        <tr>
+                            <th>
+                                od
+                            </th>
+                            <th>
+                                do
+                            </th>
+
+                        </tr>
+                        <tr>
+                            <td><input class="fveTime" type="time"></td>
+                            <td><input class="fveTime" type="time" ></td>
+                        </tr>
+                        <tr>
+                            <th colspan="2">
+                                teplota
+                            </th>
+                        </tr>
+
+                        <tr >                       
+                            <td colspan="2">
+                            	<input  class="fveTemp" type="number" >
+                            </td>
+                        </tr>
+                        <tr>
+                            <td colspan="2"><button  class="buttSave" onclick="SaveFve('Ko')">Uložit hodnoty</button></td>
+                        </tr>
+                        <tr>
+                            <th colspan="2">výstup FVE</th>
+                        </tr>
+                        <tr>
+                            <td colspan="2"><p class="fveOutState">.......</p></td>
+                        </tr>
+                        <tr>
+                            <th colspan="2">blokování</th>
+                        </tr>
+                        <tr>
+
+                        	<td><p class="enFVE">.......</p></td>
+                            <td><button  class="fveEnable" onclick="FveEnable('Ko',this)">....</button></td>
+                        </tr>
+
+                        <tr> 
+                    </table>  
+                    </td>     
+                    <td>
+                    <table class="spinTable" id="fveAccuObyv">
+                        <caption>Obývák</caption>
+
+                        <tr>
+                            <th>
+                                od
+                            </th>
+                            <th>
+                                do
+                            </th>
+
+                        </tr>
+                        <tr>
+                            <td><input class="fveTime" type="time"></td>
+                            <td><input class="fveTime" type="time" ></td>
+                        </tr>
+                        <tr>
+                            <th colspan="2">
+                                teplota
+                            </th>
+                        </tr>
+                        <tr >
+                        
+                            <td colspan="2"><input class="fveTemp" type="number" ></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2"><button class="buttSave" onclick="SaveFve('Ob')">Uložit hodnoty</button></td>
+                        </tr> 
+                        <tr>
+                            <th colspan="2">výstup FVE</th>
+
+                        </tr>
+
+                        <tr>
+                        	                           <td colspan="2" ><p class="fveOutState">.......</p></td>
+                        </tr>
+                        <tr>
+                            <th colspan="2">blokování</th>
+                        </tr>
+                        <tr>
+                            <td><p class="enFVE">.......</p></td>
+                            <td><button class="fveEnable" onclick="FveEnable('Ob',this)">....</button></td>
+                        </tr>
+
+                    </table>      
+                </td>
+                <td>
+                    <table class="spinTable" id="fveAccuZz">
+                        <caption>Zimní zahrada</caption>
+
+                        <tr>
+                            <th>
+                                od
+                            </th>
+                            <th>
+                                do
+                            </th>
+
+                        </tr>
+                        <tr>
+                            <td><input class="fveTime" type="time"></td>
+                            <td><input class="fveTime" type="time" ></td>
+                        </tr>
+                        <tr>
+                            <th colspan="2">
+                                teplota
+                            </th>
+                        </tr>
+
+                        <tr >                       
+                            <td colspan="2"><input class="fveTemp" type="number" ></td>
+                        </tr>
+                        <tr>
+                            <td colspan="2"><button  class="buttSave" onclick="SaveFve('Zz')">Uložit hodnoty</button></td>
+                        </tr>
+                        <tr>
+                            <th colspan="2">výstup FVE</th>
+                        </tr>                                            
+                         <tr>
+                            <td colspan="2"><p class="fveOutState">.......</p></td>
+                        </tr>
+                        <tr>
+                            <th colspan="2">blokování</th>
+                        </tr>
+                        <tr>
+                        	<td><p class="enFVE">.......</p></td>
+                            <td><button  class="fveEnable" onclick="FveEnable('Zz',this)">....</button></td>
+                        </tr>
+
+                        <tr> 
+                    </table>
+                </td>
+                <td>        
+                    <table  class="spinTable"  id="spinDobij">
+                        <caption>Dobíjení aku</caption>
+                        <tr>
+                            <th>
+                                zap
+                            </th>
+                            <th>
+                                vyp
+                            </th>
+                            <th>
+                                zap
+                            </th>
+                            <th>
+                                vyp
+                            </th>
+
+                            <th>
+                                <td rowspan="2"><button  onclick="Spinacky(0)">Uložit</button></td>
+                            </th>                           
+                            <th>
+                                výstup
+                            </th>
+                            
+                            <td rowspan="2"><button class="spEn"  onclick="SpinEnable(this,0)">..............</button></td>   
+                            <td rowspan="2"><button class="spMan"  onclick="ManSwitch(this,0)">zap</button></td>                   
+                        </tr>
+                        <tr>
+                            <td><input class="sp0" type="time"></td>
+                            <td><input class="sp0" type="time" ></td>
+                            <td><input class="sp0" type="time"></td>
+                            <td><input class="sp0" type="time" ></td>                          
+                            <td></td>
+                            <td><p class="spOut">.........</p></td>
+                            <td></td>
+                        </tr>
+                    </table>                      
+                    <table  class="spinTable"  id="spinS1">
+                        <caption>S 1</caption>
+                        <tr>
+                            <th>
+                                zap
+                            </th>
+                            <th>
+                                vyp
+                            </th>
+                            <th>
+                                zap
+                            </th>
+                            <th>
+                                vyp
+                            </th>
+                            <th>
+                                <td rowspan="2"><button  onclick="Spinacky(1)">Uložit</button></td>
+                            </th>                           
+                            <th>
+                                výstup
+                            </th>
+                            
+                            <td rowspan="2"><button class="spEn"  onclick="SpinEnable(this,1)">..............</button></td>   
+                            <td rowspan="2"><button class="spMan"  onclick="ManSwitch(this,1)" >zap</button></td>  
+                        </tr>
+                        <tr>
+                                <td><input class="sp1" type="time"></td>
+                                <td><input class="sp1" type="time" ></td>
+                                <td><input class="sp1" type="time"></td>
+                                <td><input class="sp1" type="time" ></td>
+                                <td></td>
+                                <td><p class="spOut">.........</p></td>
+                             </tr>
+                    </table>                      
+
+                    <table  class="spinTable"  id="spinS2">
+                            <caption>S 2</caption>
+                            <tr>
+                                <th>
+                                    zap
+                                </th>
+                                <th>
+                                    vyp
+                                </th>
+                                <th>
+                                    zap
+                                </th>
+                                <th>
+                                    vyp
+                                </th>
+                            <th>
+                                <td rowspan="2"><button  onclick="Spinacky(2)">Uložit</button></td>
+                            </th>                           
+                            <th>
+                                výstup
+                            </th>
+                            
+                            <td rowspan="2"><button class="spEn"  onclick="SpinEnable(this,2)">..............</button></td>   
+                            <td rowspan="2"><button class="spMan"  onclick="ManSwitch(this,2)" >zap</button></td> 
+                            </tr>
+                            <tr>
+                                <td><input class="sp2" type="time"></td>
+                                <td><input class="sp2" type="time" ></td>
+                                <td><input class="sp2" type="time"></td>
+                                <td><input class="sp2" type="time" ></td>
+                                <td></td>
+                                <td><p class="spOut">.........</p></td>
+                             </tr>
+                    </table>                      
+
+                    <table  class="spinTable"  id="spinS3">
+                            <caption>S 3</caption>
+                            <tr>
+                                <th>
+                                    zap
+                                </th>
+                                <th>
+                                    vyp
+                                </th>
+                                <th>
+                                    zap
+                                </th>
+                                <th>
+                                    vyp
+                            <th>
+                                <td rowspan="2"><button  onclick="Spinacky(3)">Uložit</button></td>
+                            </th>                           
+                            <th>
+                                výstup
+                            </th>
+                            
+                            <td rowspan="2"><button class="spEn"  onclick="SpinEnable(this,3)">..............</button></td>   
+                            <td rowspan="2"><button class="spMan"  onclick="ManSwitch(this,3)" >zap</button></td> 
+                            </tr>
+                            <tr>
+                                <td><input class="sp3" type="time"></td>
+                                <td><input class="sp3" type="time" ></td>
+                                <td><input class="sp3" type="time"></td>
+                                <td><input class="sp3" type="time" ></td>
+                                <td></td>
+                                <td><p class="spOut">.........</p></td>
+                             </tr>
+                    </table>                      
+
+                    <table  class="spinTable"  id="spinS4">
+                            <caption>S 4</caption>
+                            <tr>
+                                <th>
+                                    zap
+                                </th>
+                                <th>
+                                    vyp
+                                </th>
+                                <th>
+                                    zap
+                                </th>
+                                <th>
+                                    vyp
+                                </th>
+                            <th>
+                                <td rowspan="2"><button  onclick="Spinacky(4)">Uložit</button></td>
+                            </th>                           
+                            <th>
+                                výstup
+                            </th>
+                            
+                            <td rowspan="2"><button class="spEn"  onclick="SpinEnable(this,4)">..............</button></td>   
+                            <td rowspan="2"><button class="spMan"  onclick="ManSwitch(this,4)" >zap</button></td> 
+                            </tr>
+                            <tr>
+                                <td><input class="sp4" type="time"></td>
+                                <td><input class="sp4" type="time" ></td>
+                                <td><input class="sp4" type="time"></td>
+                                <td><input class="sp4" type="time" ></td>
+                                <td></td>
+                                <td><p class="spOut">.........</p></td>
+                             </tr>
+                        </table>                      
+                    </td>
+                </tr>
+        </table>  
+                
+            
+
+
+            </div>            
+        </section>        
+
+    </div>
+</body>
+</html>
