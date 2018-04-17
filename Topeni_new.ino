@@ -80,7 +80,7 @@ void setup()
 	Wire.begin();
 	DS3231_init(DS3231_INTCN);
 	ee_adrInit();
-    //defaultValues();
+    defaultValues();
 	restoreData();
 	test();
 }
@@ -373,7 +373,7 @@ Serial.println(sekce[i].tables[den].cas5);
 		{
 			if (enableFveZimZahrada.enable == true)
 			{
-				if (sekce[z_zahrada].teplotaAkt<enableFveZimZahrada.temp)enableFveZimZahrada.vystup_new = on;
+				if (sekce[zahrada].teplotaAkt<enableFveZimZahrada.temp)enableFveZimZahrada.vystup_new = on;
 				else enableFveZimZahrada.vystup_new = off;
 			}
 				//enableFveZimZahrada.vystup_new = on;
